@@ -2,6 +2,7 @@
 import NodeCache from '@cacheable/node-cache'
 import { Boom } from '@hapi/boom'
 import { randomBytes } from 'crypto'
+import Long = require('long');
 import { proto } from '../../WAProto'
 import { DEFAULT_CACHE_TTLS, KEY_BUNDLE_TYPE, MIN_PREKEY_COUNT } from '../Defaults'
 import { MessageReceiptType, MessageRelayOptions, MessageUserReceipt, SocketConfig, WACallEvent, WAMessageKey, WAMessageStatus, WAMessageStubType, WAPatchName } from '../Types'
@@ -565,6 +566,7 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 		ids: string[],
 		retryNode: BinaryNode
 	) => {
+	  // todo: implement a cache to store the last 256 sent messages (copy whatsmeow)
 		const msgs = await Promise.all(ids.map(id => getMessage({ ...key, id })))
 		const remoteJid = key.remoteJid!
 		const participant = key.participant || remoteJid
@@ -606,7 +608,10 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 		const isLid = attrs.from.includes('lid')
 		const isNodeFromMe = areJidsSameUser(attrs.participant || attrs.from, isLid ? authState.creds.me?.lid : authState.creds.me?.id)
 		const remoteJid = !isNodeFromMe || isJidGroup(attrs.from) ? attrs.from : attrs.recipient
-		const fromMe = !attrs.recipient || (attrs.type === 'retry' && isNodeFromMe)
+		const fromMe = !attrs.recipient || (
+			(attrs.type === 'retry' || attrs.type === 'sender') 
+			&& isNodeFromMe
+		)
 
 		const key: proto.IMessageKey = {
 			remoteJid,
@@ -737,9 +742,18 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 			return
 		}
 
+		const encNode = getBinaryNodeChild(node, 'enc')
+
+		// TODO: temporary fix for crashes and issues resulting of failed msmsg decryption
+		if(encNode && encNode.attrs.type === 'msmsg') {
+  		logger.debug({ key: node.attrs.key }, 'ignored msmsg')
+  		await sendMessageAck(node)
+  		return
+		}
+
 		let response: string | undefined
 
-		if(getBinaryNodeChild(node, 'unavailable') && !getBinaryNodeChild(node, 'enc')) {
+		if(getBinaryNodeChild(node, 'unavailable') && !encNode) {
 			await sendMessageAck(node)
 			const { key } = decodeMessageNode(node, authState.creds.me!.id, authState.creds.me!.lid || '').fullMessage
 			response = await requestPlaceholderResend(key)
@@ -847,7 +861,7 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 			throw new Boom('Not authenticated')
 		}
 
-		const pdoMessage = {
+		const pdoMessage: proto.Message.IPeerDataOperationRequestMessage = {
 			historySyncOnDemandRequest: {
 				chatJid: oldestMsgKey.remoteJid,
 				oldestMsgFromMe: oldestMsgKey.fromMe,
