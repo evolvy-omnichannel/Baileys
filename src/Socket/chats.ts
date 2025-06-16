@@ -219,6 +219,7 @@ export const makeChatsSocket = (config: SocketConfig) => {
 
 		for (const jid of jids) {
 			const phone = `+${jid.replace('+', '').split('@')[0].split(':')[0]}`
+			console.log(phone)
 			usyncQuery.withUser(new USyncUser().withPhone(phone).withLid(phone))
 		}
 
