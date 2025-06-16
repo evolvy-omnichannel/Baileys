@@ -36143,15 +36143,6 @@ export namespace proto {
 
         /** MessageKey participant */
         participant?: (string|null);
-
-        /** MessageKey senderLid */
-        senderLid?: (string|null);
-
-        /** MessageKey participantLid */
-        participantLid?: (string|null);
-
-        /** MessageKey senderPn */
-        senderPn?: (string|null);
     }
 
     /** Represents a MessageKey. */
