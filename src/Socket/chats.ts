@@ -226,6 +226,7 @@ export const makeChatsSocket = (config: SocketConfig) => {
 		const results = await sock.executeUSyncQuery(usyncQuery)
 
 		if (results) {
+			console.log(results.list)
 			return results.list.filter(a => !!a.contact).map(({ contact, id, lid }) => ({ jid: id, exists: contact, lid }))
 		}
 	}
