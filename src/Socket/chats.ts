@@ -227,7 +227,7 @@ export const makeChatsSocket = (config: SocketConfig) => {
 
 		if (results) {
 			console.log(results.list)
-			return results.list.filter(a => !!a.contact).map(({ contact, id, lid }) => ({ jid: id, exists: contact, lid }))
+			return results.list.filter(a => !!a.contact).map(c => ({ jid: c.id, exists: c.contact, lid: c.lid, ...c }))
 		}
 	}
 
