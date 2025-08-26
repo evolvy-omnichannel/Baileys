@@ -689,34 +689,34 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 								)
 							}
 						}
-						
-						ev.emit(
-							'messages.update',
-							ids.map(id => ({
-								key: { ...key, id },
-								update: { status }
-							}))
-						)
+					}
 
+					ev.emit(
+						'messages.update',
+						ids.map(id => ({
+							key: { ...key, id },
+							update: { status }
+						}))
+					)
 
-						if(attrs.type === 'retry') {
-							// correctly set who is asking for the retry
-							key.participant = key.participant || attrs.from
-							const retryNode = getBinaryNodeChild(node, 'retry')
-							if(willSendMessageAgain(ids[0], key.participant)) {
-								if(key.fromMe) {
-									try {
-										logger.debug({ attrs, key }, 'recv retry request')
-										await sendMessagesAgain(key, ids, retryNode!)
-									} catch(error) {
-										logger.error({ key, ids, trace: error.stack }, 'error in sending message again')
-									}
-								} else {
-									logger.info({ attrs, key }, 'recv retry for not fromMe message')
+					if (attrs.type === 'retry') {
+						// correctly set who is asking for the retry
+						key.participant = key.participant || attrs.from
+						const retryNode = getBinaryNodeChild(node, 'retry')
+						if (willSendMessageAgain(ids[0], key.participant)) {
+							if (key.fromMe) {
+								try {
+									logger.debug({ attrs, key }, 'recv retry request')
+									await sendMessagesAgain(key, ids, retryNode!)
+								} catch (error) {
+									logger.error({ key, ids, trace: error.stack }, 'error in sending message again')
 								}
 							} else {
-								logger.info({ attrs, key }, 'will not send message again, as sent too many times')
+								logger.info({ attrs, key }, 'recv retry for not fromMe message')
 							}
+						} else {
+							logger.info({ attrs, key }, 'will not send message again, as sent too many times')
+						}
 					}
 
 					if (attrs.type === 'retry') {
@@ -1304,8 +1304,7 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 	})
 	ws.on('CB:ack,class:message', (node: BinaryNode) => {
 		processNodeWithBuffer(node, 'handling receipt', handleReceipt)
-		handleBadAck(node)
-			.catch(error => onUnexpectedError(error, 'handling bad ack'))
+		handleBadAck(node).catch(error => onUnexpectedError(error, 'handling bad ack'))
 	})
 
 	ev.on('call', ([call]) => {
