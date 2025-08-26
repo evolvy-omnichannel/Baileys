@@ -65,12 +65,9 @@ export const getKeyAuthor = (key: proto.IMessageKey | undefined | null, meId = '
 
 export const writeRandomPadMax16 = (msg: Uint8Array) => {
 	const pad = randomBytes(1)
-	pad[0] &= 0xf
-	if (!pad[0]) {
-		pad[0] = 0xf
-	}
+	const padLength = (pad[0]! & 0x0f) + 1
 
-	return Buffer.concat([msg, Buffer.alloc(pad[0], pad[0])])
+	return Buffer.concat([msg, Buffer.alloc(padLength, padLength)])
 }
 
 export const unpadRandomMax16 = (e: Uint8Array | Buffer) => {
@@ -310,10 +307,10 @@ export const generateMdTagPrefix = () => {
 
 const STATUS_MAP: { [_: string]: proto.WebMessageInfo.Status } = {
 	// 'sender': proto.WebMessageInfo.Status.SERVER_ACK,
-	'played': proto.WebMessageInfo.Status.PLAYED,
-	'read': proto.WebMessageInfo.Status.READ,
+	played: proto.WebMessageInfo.Status.PLAYED,
+	read: proto.WebMessageInfo.Status.READ,
 	'read-self': proto.WebMessageInfo.Status.READ,
-	'sender': proto.WebMessageInfo.Status.DELIVERY_ACK
+	sender: proto.WebMessageInfo.Status.DELIVERY_ACK
 }
 /**
  * Given a type of receipt, returns what the new status of the message should be
@@ -322,15 +319,15 @@ const STATUS_MAP: { [_: string]: proto.WebMessageInfo.Status } = {
 export const getStatusFromReceiptType = (tag: string | undefined, type: string | undefined) => {
 	const status = STATUS_MAP[type!]
 
-	if(typeof type === 'undefined' && tag === 'ack') {
+	if (typeof type === 'undefined' && tag === 'ack') {
 		return proto.WebMessageInfo.Status.SERVER_ACK
 	}
 
-	if(typeof type === 'undefined' && tag === 'receipt') {
+	if (typeof type === 'undefined' && tag === 'receipt') {
 		return proto.WebMessageInfo.Status.DELIVERY_ACK
 	}
 
-	if(typeof type === 'undefined') {
+	if (typeof type === 'undefined') {
 		return proto.WebMessageInfo.Status.SERVER_ACK
 	}
 
