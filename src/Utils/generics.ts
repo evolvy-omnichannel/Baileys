@@ -3,7 +3,7 @@ import axios, { type AxiosRequestConfig } from 'axios'
 import { createHash, randomBytes } from 'crypto'
 import { platform, release } from 'os'
 import { proto } from '../../WAProto/index.js'
-import version from '../Defaults/baileys-version.json' with { type: 'json' }
+import version from '../Defaults/baileys-version.json'
 const baileysVersion = version.version
 import type {
 	BaileysEventEmitter,
@@ -312,10 +312,10 @@ export const generateMdTagPrefix = () => {
 
 const STATUS_MAP: { [_: string]: proto.WebMessageInfo.Status } = {
 	// 'sender': proto.WebMessageInfo.Status.SERVER_ACK,
-	'played': proto.WebMessageInfo.Status.PLAYED,
-	'read': proto.WebMessageInfo.Status.READ,
+	played: proto.WebMessageInfo.Status.PLAYED,
+	read: proto.WebMessageInfo.Status.READ,
 	'read-self': proto.WebMessageInfo.Status.READ,
-	'sender': proto.WebMessageInfo.Status.DELIVERY_ACK
+	sender: proto.WebMessageInfo.Status.DELIVERY_ACK
 }
 /**
  * Given a type of receipt, returns what the new status of the message should be
@@ -324,15 +324,15 @@ const STATUS_MAP: { [_: string]: proto.WebMessageInfo.Status } = {
 export const getStatusFromReceiptType = (tag: string | undefined, type: string | undefined) => {
 	const status = STATUS_MAP[type!]
 
-	if(typeof type === 'undefined' && tag === 'ack') {
+	if (typeof type === 'undefined' && tag === 'ack') {
 		return proto.WebMessageInfo.Status.SERVER_ACK
 	}
 
-	if(typeof type === 'undefined' && tag === 'receipt') {
+	if (typeof type === 'undefined' && tag === 'receipt') {
 		return proto.WebMessageInfo.Status.DELIVERY_ACK
 	}
 
-	if(typeof type === 'undefined') {
+	if (typeof type === 'undefined') {
 		return proto.WebMessageInfo.Status.SERVER_ACK
 	}
 
