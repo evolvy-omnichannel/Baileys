@@ -633,7 +633,7 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 		}
 	}
 
-	const handleReceipt = async(node: BinaryNode) => {
+	const handleReceipt = async (node: BinaryNode) => {
 		const { tag, attrs, content } = node
 		const isLid = attrs.from.includes('lid')
 		const isNodeFromMe = areJidsSameUser(
@@ -664,62 +664,58 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 
 		try {
 			await Promise.all([
-				processingMutex.mutex(
-					async() => {
-						const status = getStatusFromReceiptType(tag, attrs.type)
-						if(
-							typeof status !== 'undefined' &&
-							(
-								// basically, we only want to know when a message from us has been delivered to/read by the other person
-								// or another device of ours has read some messages
-								status >= proto.WebMessageInfo.Status.SERVER_ACK ||
-								!isNodeFromMe
-							)
-						) {
-							if(isJidGroup(remoteJid) || isJidStatusBroadcast(remoteJid)) {
-								if(attrs.participant) {
-									const updateKey: keyof MessageUserReceipt = status === proto.WebMessageInfo.Status.DELIVERY_ACK ? 'receiptTimestamp' : 'readTimestamp'
-									ev.emit(
-										'message-receipt.update',
-										ids.map(id => ({
-											key: { ...key, id },
-											receipt: {
-												userJid: jidNormalizedUser(attrs.participant),
-												[updateKey]: +attrs.t
-											}
-										}))
-									)
-								}
+				processingMutex.mutex(async () => {
+					const status = getStatusFromReceiptType(tag, attrs.type)
+					if (
+						typeof status !== 'undefined' &&
+						// basically, we only want to know when a message from us has been delivered to/read by the other person
+						// or another device of ours has read some messages
+						(status >= proto.WebMessageInfo.Status.SERVER_ACK || !isNodeFromMe)
+					) {
+						if (isJidGroup(remoteJid) || isJidStatusBroadcast(remoteJid)) {
+							if (attrs.participant) {
+								const updateKey: keyof MessageUserReceipt =
+									status === proto.WebMessageInfo.Status.DELIVERY_ACK ? 'receiptTimestamp' : 'readTimestamp'
+								ev.emit(
+									'message-receipt.update',
+									ids.map(id => ({
+										key: { ...key, id },
+										receipt: {
+											userJid: jidNormalizedUser(attrs.participant),
+											[updateKey]: +attrs.t
+										}
+									}))
+								)
 							}
 						}
+					}
 
-						ev.emit(
-							'messages.update',
-							ids.map(id => ({
-								key: { ...key, id },
-								update: { status }
-							}))
-						)
+					ev.emit(
+						'messages.update',
+						ids.map(id => ({
+							key: { ...key, id },
+							update: { status }
+						}))
+					)
 
-
-						if(attrs.type === 'retry') {
-							// correctly set who is asking for the retry
-							key.participant = key.participant || attrs.from
-							const retryNode = getBinaryNodeChild(node, 'retry')
-							if(willSendMessageAgain(ids[0], key.participant)) {
-								if(key.fromMe) {
-									try {
-										logger.debug({ attrs, key }, 'recv retry request')
-										await sendMessagesAgain(key, ids, retryNode!)
-									} catch(error) {
-										logger.error({ key, ids, trace: error.stack }, 'error in sending message again')
-									}
-								} else {
-									logger.info({ attrs, key }, 'recv retry for not fromMe message')
+					if (attrs.type === 'retry') {
+						// correctly set who is asking for the retry
+						key.participant = key.participant || attrs.from
+						const retryNode = getBinaryNodeChild(node, 'retry')
+						if (willSendMessageAgain(ids[0], key.participant)) {
+							if (key.fromMe) {
+								try {
+									logger.debug({ attrs, key }, 'recv retry request')
+									await sendMessagesAgain(key, ids, retryNode!)
+								} catch (error) {
+									logger.error({ key, ids, trace: error.stack }, 'error in sending message again')
 								}
 							} else {
-								logger.info({ attrs, key }, 'will not send message again, as sent too many times')
+								logger.info({ attrs, key }, 'recv retry for not fromMe message')
 							}
+						} else {
+							logger.info({ attrs, key }, 'will not send message again, as sent too many times')
+						}
 					}
 
 					if (attrs.type === 'retry') {
@@ -831,6 +827,45 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 			node.attrs.sender_pn
 		) {
 			ev.emit('chats.phoneNumberShare', { lid: node.attrs.from, jid: node.attrs.sender_pn })
+		}
+
+		if (msg.message?.protocolMessage?.lidMigrationMappingSyncMessage?.encodedMappingPayload) {
+			try {
+				const payload = msg.message.protocolMessage.lidMigrationMappingSyncMessage.encodedMappingPayload
+				const decoded = proto.LIDMigrationMappingSyncPayload.decode(payload)
+
+				logger.debug(
+					{
+						mappingCount: decoded.pnToLidMappings?.length || 0,
+						timestamp: decoded.chatDbMigrationTimestamp
+					},
+					'Received LID migration sync message from server'
+				)
+
+				const lidMapping = signalRepository.getLIDMappingStore()
+				if (decoded.pnToLidMappings && decoded.pnToLidMappings.length > 0) {
+					for (const mapping of decoded.pnToLidMappings) {
+						const pn = `${mapping.pn}@s.whatsapp.net`
+						// Use latestLid if available, otherwise assignedLid (proper LID refresh)
+						const lidValue = mapping.latestLid || mapping.assignedLid
+						const lid = `${lidValue}@lid`
+
+						await lidMapping.storeLIDPNMapping(lid, pn)
+						logger.debug(
+							{
+								pn,
+								lid,
+								assignedLid: mapping.assignedLid,
+								latestLid: mapping.latestLid,
+								usedLatest: !!mapping.latestLid
+							},
+							'Stored server-provided PN-LID mapping'
+						)
+					}
+				}
+			} catch (error) {
+				logger.error({ error }, 'Failed to process LID migration sync message')
+			}
 		}
 
 		try {
@@ -1284,8 +1319,7 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 	})
 	ws.on('CB:ack,class:message', (node: BinaryNode) => {
 		processNodeWithBuffer(node, 'handling receipt', handleReceipt)
-		handleBadAck(node)
-			.catch(error => onUnexpectedError(error, 'handling bad ack'))
+		handleBadAck(node).catch(error => onUnexpectedError(error, 'handling bad ack'))
 	})
 
 	ev.on('call', ([call]) => {
